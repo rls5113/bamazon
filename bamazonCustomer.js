@@ -12,13 +12,12 @@ var connection = mysql.createConnection({
 
 connection.connect(function(err) {
   if (err) throw err;
-  console.log("connected as id " + connection.threadId);
+  // console.log("connected as id " + connection.threadId);
   displayItems();
-  connection.end();
 });
 
 function displayItems() {
-  connection.query("SELECT item_id,product_name,price FROM products order by product_name", function(err, res) {
+  connection.query("SELECT item_id,product_name,price FROM products order by item_id", function(err, res) {
     if (err) throw err;
     var table = new Table({
         head: ["ID", "Item Description", "Price"],
@@ -57,45 +56,44 @@ function displayItems() {
             type: "input",
             message: "How many do you wish to purchase?"
         }]).then(function (answer) {
-            console.log(answer.purchaseId);
-            console.log(answer.purchaseQty);
+            // console.log(answer.purchaseId);
+            // console.log(answer.purchaseQty);
 
-            connection.query("select stock_quantity from products where item_id = ?",
+            connection.query("select * from products where ?",
             {
               item_id: answer.purchaseId
             }, 
             function(err,res) {
               if(err)  throw err;
-              console.log(query.sql);
-              console.log(res.stock_quantity);
+              // console.log(res[0]); 
+              var item = res[0];             
+              var transactionTotal = parseFloat(item.price) * parseFloat(answer.purchaseQty);
               
-                // console.log("id: "+answer.purchaseId+" qty is "+res);
-
-
+              if(item.stock_quantity - answer.purchaseQty < 0) {
+                console.log("Insufficient quantity in stock. We only have "+item.stock_quantity+" of "+item.product_name+" available.");
+                connection.end();
+                return;
+              }else {
+                //update the current instock quantity
+                connection.query("update products set ? where ?",
+                [{
+                  stock_quantity: parseInt(item.stock_quantity) - parseInt(answer.purchaseQty),
+                  quantity_sold: parseInt(item.quantity_sold) + parseInt(answer.purchaseQty),
+                  sales: transactionTotal + parseFloat(item.sales)
+                },
+                {
+                  item_id: answer.purchaseId
+                }], 
+                function(err,res) {
+                  if(err)  throw err;
+                  console.log("Your purchase total is $"+transactionTotal.toFixed(2));
+                  connection.end();
+                });
+              }
+              
             });
-
-            // switch (answer.purchaseId) {
-            //     case "purchaseQty":
-            //         console.log("qty");
-            //         break;
-            //     case "default":
-            //         console.log("id");
-            //         break;
-            // }
         });  
     });
   
 }
 
-function getQtyForUnit(id) {
-  connection.query("select stock_quantity from product where item_id = ?",
-  {
-    item_id: id
-  }, 
-  function(err,res) {
-    if(err)  throw err;
-    console.log(res);
-      console.log("id: "+id+" qty is "+res);
-      return res;
-  });
-}
